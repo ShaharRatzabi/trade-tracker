@@ -1,21 +1,18 @@
-const { MongoClient, ObjectId } = require('mongodb');
+const fs   = require('fs');
+const path = require('path');
 
-let client;
-let db;
+const DB_FILE = path.join(__dirname, 'trades.json');
 
-async function connect() {
-  if (db) return db;
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI environment variable is not set');
-  client = new MongoClient(uri);
-  await client.connect();
-  db = client.db('trade-tracker');
-  return db;
+function load() {
+  try {
+    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  } catch {
+    return { trades: [], nextId: 1 };
+  }
 }
 
-async function getCollection() {
-  const database = await connect();
-  return database.collection('trades');
+function save(db) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
 
-module.exports = { getCollection, ObjectId };
+module.exports = { load, save };

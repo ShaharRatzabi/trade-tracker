@@ -1,7 +1,6 @@
-require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
-const { getCollection, ObjectId } = require('./database');
+const { load, save } = require('./database');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -18,29 +17,19 @@ function matchesFilters(trade, { symbol, start_date, end_date }) {
   return true;
 }
 
-function toClient(doc) {
-  const { _id, ...rest } = doc;
-  return { id: _id.toHexString(), ...rest };
-}
-
 // ─── GET /api/trades ─────────────────────────────────────────────────────────
 
-app.get('/api/trades', async (req, res) => {
-  try {
-    const col    = await getCollection();
-    const docs   = await col.find({}).sort({ date: -1, _id: -1 }).toArray();
-    const result = docs
-      .map(toClient)
-      .filter(t => matchesFilters(t, req.query));
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.get('/api/trades', (req, res) => {
+  const db     = load();
+  const result = db.trades
+    .filter(t => matchesFilters(t, req.query))
+    .sort((a, b) => (b.date + String(b.id)) > (a.date + String(a.id)) ? 1 : -1);
+  res.json(result);
 });
 
 // ─── POST /api/trades ────────────────────────────────────────────────────────
 
-app.post('/api/trades', async (req, res) => {
+app.post('/api/trades', (req, res) => {
   const { symbol, quantity, entry_price, stop_loss, exit_price, date, notes } = req.body;
 
   if (!symbol || !entry_price || !stop_loss || !quantity || !date) {
@@ -53,7 +42,9 @@ app.post('/api/trades', async (req, res) => {
     return res.status(400).json({ error: 'Exit price must be > 0' });
   }
 
-  const doc = {
+  const db    = load();
+  const trade = {
+    id:          db.nextId++,
     symbol:      symbol.toUpperCase(),
     quantity:    Number(quantity),
     entry_price: Number(entry_price),
@@ -64,66 +55,54 @@ app.post('/api/trades', async (req, res) => {
     created_at:  new Date().toISOString(),
   };
 
-  try {
-    const col    = await getCollection();
-    const result = await col.insertOne(doc);
-    res.status(201).json(toClient({ _id: result.insertedId, ...doc }));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  db.trades.push(trade);
+  save(db);
+  res.status(201).json(trade);
 });
 
 // ─── PUT /api/trades/:id ─────────────────────────────────────────────────────
 
-app.put('/api/trades/:id', async (req, res) => {
-  let oid;
-  try { oid = new ObjectId(req.params.id); }
-  catch { return res.status(400).json({ error: 'Invalid trade id' }); }
+app.put('/api/trades/:id', (req, res) => {
+  const id  = Number(req.params.id);
+  const db  = load();
+  const idx = db.trades.findIndex(t => t.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Trade not found' });
 
-  try {
-    const col  = await getCollection();
-    const prev = await col.findOne({ _id: oid });
-    if (!prev) return res.status(404).json({ error: 'Trade not found' });
+  const prev = db.trades[idx];
+  const body = req.body;
 
-    const body  = req.body;
-    const entry = body.entry_price != null ? Number(body.entry_price) : prev.entry_price;
-    const stop  = body.stop_loss   != null ? Number(body.stop_loss)   : prev.stop_loss;
-    if (stop >= entry) {
-      return res.status(400).json({ error: 'Stop loss must be below entry price' });
-    }
-
-    const update = {
-      symbol:      body.symbol      != null ? body.symbol.toUpperCase()  : prev.symbol,
-      quantity:    body.quantity    != null ? Number(body.quantity)       : prev.quantity,
-      entry_price: entry,
-      stop_loss:   stop,
-      exit_price:  'exit_price' in body ? (body.exit_price ? Number(body.exit_price) : null) : prev.exit_price,
-      date:        body.date        != null ? body.date                   : prev.date,
-      notes:       'notes'       in body ? (body.notes || null)           : prev.notes,
-    };
-
-    await col.updateOne({ _id: oid }, { $set: update });
-    res.json(toClient({ _id: oid, ...prev, ...update }));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  const entry = body.entry_price != null ? Number(body.entry_price) : prev.entry_price;
+  const stop  = body.stop_loss   != null ? Number(body.stop_loss)   : prev.stop_loss;
+  if (stop >= entry) {
+    return res.status(400).json({ error: 'Stop loss must be below entry price' });
   }
+
+  db.trades[idx] = {
+    ...prev,
+    symbol:      body.symbol      != null ? body.symbol.toUpperCase()  : prev.symbol,
+    quantity:    body.quantity    != null ? Number(body.quantity)       : prev.quantity,
+    entry_price: entry,
+    stop_loss:   stop,
+    exit_price:  'exit_price' in body ? (body.exit_price ? Number(body.exit_price) : null) : prev.exit_price,
+    date:        body.date        != null ? body.date                   : prev.date,
+    notes:       'notes'       in body ? (body.notes || null)           : prev.notes,
+  };
+
+  save(db);
+  res.json(db.trades[idx]);
 });
 
 // ─── DELETE /api/trades/:id ──────────────────────────────────────────────────
 
-app.delete('/api/trades/:id', async (req, res) => {
-  let oid;
-  try { oid = new ObjectId(req.params.id); }
-  catch { return res.status(400).json({ error: 'Invalid trade id' }); }
+app.delete('/api/trades/:id', (req, res) => {
+  const id  = Number(req.params.id);
+  const db  = load();
+  const idx = db.trades.findIndex(t => t.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Trade not found' });
 
-  try {
-    const col    = await getCollection();
-    const result = await col.deleteOne({ _id: oid });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Trade not found' });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  db.trades.splice(idx, 1);
+  save(db);
+  res.json({ success: true });
 });
 
 // ─── Start ───────────────────────────────────────────────────────────────────
