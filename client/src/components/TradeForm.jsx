@@ -108,8 +108,7 @@ export default function TradeForm({ trade, onSave, onClose }) {
   const validate = () => {
     if (!form.symbol.trim())                                  return 'Symbol is required'
     if (!form.entry_price || Number(form.entry_price) <= 0)  return 'Entry price must be > 0'
-    if (!form.stop_loss   || Number(form.stop_loss)   <= 0)  return 'Stop loss must be > 0'
-    if (Number(form.stop_loss) >= Number(form.entry_price))  return 'Stop loss must be below entry price'
+    if (!form.stop_loss   || isNaN(Number(form.stop_loss))) return 'Stop loss is required'
     if (form.exit_price && Number(form.exit_price) <= 0)     return 'Exit price must be > 0'
     if (!form.date) return 'Date is required'
     if (form.entryMethod === 'shares') {
