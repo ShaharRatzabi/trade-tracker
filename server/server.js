@@ -36,9 +36,6 @@ app.post('/api/trades', async (req, res) => {
   if (!symbol || !entry_price || !stop_loss || !quantity || !date) {
     return res.status(400).json({ error: 'symbol, entry_price, stop_loss, quantity, and date are required' });
   }
-  if (Number(stop_loss) >= Number(entry_price)) {
-    return res.status(400).json({ error: 'Stop loss must be below entry price' });
-  }
   if (exit_price && Number(exit_price) <= 0) {
     return res.status(400).json({ error: 'Exit price must be > 0' });
   }
@@ -77,10 +74,6 @@ app.put('/api/trades/:id', async (req, res) => {
 
   const entry = body.entry_price != null ? Number(body.entry_price) : prev.entry_price;
   const stop  = body.stop_loss   != null ? Number(body.stop_loss)   : prev.stop_loss;
-  if (stop >= entry) {
-    return res.status(400).json({ error: 'Stop loss must be below entry price' });
-  }
-
   const updates = {
     symbol:      body.symbol      != null ? body.symbol.toUpperCase()  : prev.symbol,
     quantity:    body.quantity    != null ? Number(body.quantity)       : prev.quantity,

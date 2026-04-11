@@ -227,7 +227,7 @@ export default function TradeForm({ trade, onSave, onClose }) {
                 value={form.entry_price} onChange={set('entry_price')} className={inputCls} />
             </Field>
             <Field label="Stop Loss" required>
-              <input type="number" placeholder="0.00" min="0" step="any"
+              <input type="number" placeholder="0.00" step="any"
                 value={form.stop_loss} onChange={set('stop_loss')} className={inputCls} />
             </Field>
           </div>
