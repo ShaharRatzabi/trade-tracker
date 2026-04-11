@@ -15,10 +15,10 @@ function tvUrl(symbol) {
 }
 
 function riskOf(t) {
-  return (t.entry_price - t.stop_loss) * t.quantity
+  return Math.max(0, (t.entry_price - t.stop_loss) * t.quantity)
 }
 function riskPctOf(t) {
-  return ((t.entry_price - t.stop_loss) / t.entry_price) * 100
+  return Math.max(0, ((t.entry_price - t.stop_loss) / t.entry_price) * 100)
 }
 function pnlOf(t) {
   if (!t.exit_price) return null

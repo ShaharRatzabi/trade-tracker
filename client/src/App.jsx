@@ -47,8 +47,9 @@ export default function App() {
       openTrades:    open.length,
       closedTrades:  closed.length,
       totalInvested: open.reduce((s, t) => s + t.entry_price * t.quantity, 0),
-      totalRisk:     open.reduce((s, t) => s + (t.entry_price - t.stop_loss) * t.quantity, 0),
+      totalRisk:     open.reduce((s, t) => s + Math.max(0, (t.entry_price - t.stop_loss) * t.quantity), 0),
       closedPnL:     closed.reduce((s, t) => s + (t.exit_price - t.entry_price) * t.quantity, 0),
+      totalFees:     open.length * 2 + closed.length * 4,
     }
   }, [trades])
 
